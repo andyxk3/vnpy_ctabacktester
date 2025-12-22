@@ -1,3 +1,8 @@
+# 1.3.0版本
+
+1. 策略代码编辑，支持cursor和pycharm编辑器
+2. 基于mypy优化type hinting
+
 # 1.2.0版本
 
 1. vnpy框架4.0版本升级适配
