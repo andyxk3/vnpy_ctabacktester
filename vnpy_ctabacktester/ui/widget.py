@@ -1,4 +1,3 @@
-import os
 import platform
 import csv
 import shutil
@@ -513,16 +512,32 @@ class BacktesterManager(QtWidgets.QWidget):
 
         file_path: str = self.backtester_engine.get_strategy_class_file(class_name)
 
-        if shutil.which("code"):
+        # 按优先级排序的常用代码编辑器命令列表
+        editor_cmds: list[str] = [
+            "code",         # VS Code
+            "cursor",       # Cursor
+            "pycharm64",    # PyCharm (Windows)
+            "charm",        # PyCharm (命令行启动器)
+        ]
+
+        # 查找可用的编辑器
+        editor_cmd: str = ""
+        for cmd in editor_cmds:
+            if shutil.which(cmd):
+                editor_cmd = cmd
+                break
+
+        if editor_cmd:
             if platform.system() == "Windows":
-                subprocess.run(["code", file_path], shell=True)
+                subprocess.run([editor_cmd, file_path], shell=True)
             else:
-                os.system(f"code {file_path}")
+                subprocess.run([editor_cmd, file_path])
         else:
             QtWidgets.QMessageBox.warning(
                 self,
                 _("启动代码编辑器失败"),
-                _("请检查是否安装了Visual Studio Code，并将其路径添加到了系统全局变量中！")
+                _("未检测到可用的代码编辑器，请安装以下任一编辑器并添加到系统PATH：\n"
+                  "Cursor、VS Code、PyCharm")
             )
 
     def reload_strategy_class(self) -> None:
