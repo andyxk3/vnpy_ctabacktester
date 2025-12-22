@@ -4,14 +4,14 @@ import shutil
 import subprocess
 from datetime import datetime, timedelta
 from copy import copy
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pyqtgraph as pg
 from pandas import DataFrame
 
 from vnpy.trader.constant import Interval, Direction, Exchange
-from vnpy.trader.engine import MainEngine, BaseEngine
+from vnpy.trader.engine import MainEngine
 from vnpy.trader.ui import QtCore, QtWidgets, QtGui
 from vnpy.trader.ui.widget import BaseMonitor, BaseCell, DirectionCell, EnumCell
 from vnpy.event import Event, EventEngine
@@ -27,7 +27,8 @@ from ..engine import (
     EVENT_BACKTESTER_LOG,
     EVENT_BACKTESTER_BACKTESTING_FINISHED,
     EVENT_BACKTESTER_OPTIMIZATION_FINISHED,
-    OptimizationSetting
+    OptimizationSetting,
+    BacktesterEngine
 )
 
 
@@ -47,7 +48,7 @@ class BacktesterManager(QtWidgets.QWidget):
         self.main_engine: MainEngine = main_engine
         self.event_engine: EventEngine = event_engine
 
-        self.backtester_engine: BaseEngine = main_engine.get_engine(APP_NAME)
+        self.backtester_engine: BacktesterEngine = main_engine.get_engine(APP_NAME)     # type: ignore
         self.class_names: list = []
         self.settings: dict = {}
 
@@ -289,11 +290,13 @@ class BacktesterManager(QtWidgets.QWidget):
 
     def process_backtesting_finished_event(self, event: Event) -> None:
         """"""
-        statistics: dict = self.backtester_engine.get_result_statistics()
-        self.statistics_monitor.set_data(statistics)
+        statistics: dict | None = self.backtester_engine.get_result_statistics()
+        if statistics:
+            self.statistics_monitor.set_data(statistics)
 
-        df: DataFrame = self.backtester_engine.get_result_df()
-        self.chart.set_data(df)
+        df: DataFrame | None = self.backtester_engine.get_result_df()
+        if df is not None:
+            self.chart.set_data(df)
 
         self.trade_button.setEnabled(True)
         self.order_button.setEnabled(True)
@@ -318,8 +321,8 @@ class BacktesterManager(QtWidgets.QWidget):
 
         vt_symbol: str = self.symbol_line.text()
         interval: str = self.interval_combo.currentText()
-        start: datetime = self.start_date_edit.dateTime().toPython()
-        end: datetime = self.end_date_edit.dateTime().toPython()
+        start: datetime = cast(datetime, self.start_date_edit.dateTime().toPython())
+        end: datetime = cast(datetime, self.end_date_edit.dateTime().toPython())
         rate: float = float(self.rate_line.text())
         slippage: float = float(self.slippage_line.text())
         size: float = float(self.size_line.text())
@@ -393,8 +396,8 @@ class BacktesterManager(QtWidgets.QWidget):
         class_name: str = self.class_combo.currentText()
         vt_symbol: str = self.symbol_line.text()
         interval: str = self.interval_combo.currentText()
-        start: object = self.start_date_edit.dateTime().toPython()
-        end: object = self.end_date_edit.dateTime().toPython()
+        start: datetime = cast(datetime, self.start_date_edit.dateTime().toPython())
+        end: datetime = cast(datetime, self.end_date_edit.dateTime().toPython())
         rate: float = float(self.rate_line.text())
         slippage: float = float(self.slippage_line.text())
         size: float = float(self.size_line.text())
@@ -461,7 +464,9 @@ class BacktesterManager(QtWidgets.QWidget):
 
     def show_optimization_result(self) -> None:
         """"""
-        result_values: list = self.backtester_engine.get_result_values()
+        result_values: list | None = self.backtester_engine.get_result_values()
+        if result_values is None:
+            return
 
         dialog: OptimizationResultMonitor = OptimizationResultMonitor(
             result_values,
@@ -684,11 +689,11 @@ class BacktestingSettingEditor(QtWidgets.QDialog):
 
             edit: QtWidgets.QLineEdit = QtWidgets.QLineEdit(str(value))
             if type_ is int:
-                validator: QtGui.QIntValidator = QtGui.QIntValidator()
-                edit.setValidator(validator)
+                int_validator: QtGui.QIntValidator = QtGui.QIntValidator()
+                edit.setValidator(int_validator)
             elif type_ is float:
-                validator = QtGui.QDoubleValidator()
-                edit.setValidator(validator)
+                double_validator: QtGui.QDoubleValidator = QtGui.QDoubleValidator()
+                edit.setValidator(double_validator)
 
             form.addRow(f"{name} {type_}", edit)
 
@@ -884,8 +889,6 @@ class OptimizationSettingEditor(QtWidgets.QDialog):
 
     def init_ui(self) -> None:
         """"""
-        QLabel: QtWidgets.QLabel = QtWidgets.QLabel
-
         self.target_combo: QtWidgets.QComboBox = QtWidgets.QComboBox()
         self.target_combo.addItems(list(self.DISPLAY_NAME_MAP.keys()))
 
@@ -895,14 +898,14 @@ class OptimizationSettingEditor(QtWidgets.QDialog):
         self.worker_spin.setToolTip(_("设为0则自动根据CPU核心数启动对应数量的进程"))
 
         grid: QtWidgets.QGridLayout = QtWidgets.QGridLayout()
-        grid.addWidget(QLabel(_("优化目标")), 0, 0)
+        grid.addWidget(QtWidgets.QLabel(_("优化目标")), 0, 0)
         grid.addWidget(self.target_combo, 0, 1, 1, 3)
-        grid.addWidget(QLabel(_("进程上限")), 1, 0)
+        grid.addWidget(QtWidgets.QLabel(_("进程上限")), 1, 0)
         grid.addWidget(self.worker_spin, 1, 1, 1, 3)
-        grid.addWidget(QLabel(_("参数")), 2, 0)
-        grid.addWidget(QLabel(_("开始")), 2, 1)
-        grid.addWidget(QLabel(_("步进")), 2, 2)
-        grid.addWidget(QLabel(_("结束")), 2, 3)
+        grid.addWidget(QtWidgets.QLabel(_("参数")), 2, 0)
+        grid.addWidget(QtWidgets.QLabel(_("开始")), 2, 1)
+        grid.addWidget(QtWidgets.QLabel(_("步进")), 2, 2)
+        grid.addWidget(QtWidgets.QLabel(_("结束")), 2, 3)
 
         # Add vt_symbol and name edit if add new strategy
         self.setWindowTitle(_("优化参数配置：{}").format(self.class_name))
@@ -922,7 +925,7 @@ class OptimizationSettingEditor(QtWidgets.QDialog):
             for edit in [start_edit, step_edit, end_edit]:
                 edit.setValidator(validator)
 
-            grid.addWidget(QLabel(name), row, 0)
+            grid.addWidget(QtWidgets.QLabel(name), row, 0)
             grid.addWidget(start_edit, row, 1)
             grid.addWidget(step_edit, row, 2)
             grid.addWidget(end_edit, row, 3)
@@ -1159,7 +1162,7 @@ class BacktestingResultDialog(QtWidgets.QDialog):
         main_engine: MainEngine,
         event_engine: EventEngine,
         title: str,
-        table_class: QtWidgets.QTableWidget
+        table_class: type[BaseMonitor]
     ) -> None:
         """"""
         super().__init__()
@@ -1167,7 +1170,7 @@ class BacktestingResultDialog(QtWidgets.QDialog):
         self.main_engine: MainEngine = main_engine
         self.event_engine: EventEngine = event_engine
         self.title: str = title
-        self.table_class: QtWidgets.QTableWidget = table_class
+        self.table_class: type[BaseMonitor] = table_class
 
         self.updated: bool = False
 
@@ -1178,7 +1181,7 @@ class BacktestingResultDialog(QtWidgets.QDialog):
         self.setWindowTitle(self.title)
         self.resize(1100, 600)
 
-        self.table: QtWidgets.QTableWidget = self.table_class(self.main_engine, self.event_engine)
+        self.table: BaseMonitor = self.table_class(self.main_engine, self.event_engine)
 
         vbox: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
         vbox.addWidget(self.table)
